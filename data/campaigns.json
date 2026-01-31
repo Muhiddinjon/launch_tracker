@@ -1,0 +1,40 @@
+{
+  "campaigns": [
+    {
+      "id": "1",
+      "name": "SMS Kampaniya",
+      "channel": "sms",
+      "startDate": "2026-01-29",
+      "endDate": null,
+      "budget": 0,
+      "spent": 0,
+      "status": "active",
+      "notes": "SMS orqali driver jalb qilish"
+    },
+    {
+      "id": "2",
+      "name": "Target Reklama",
+      "channel": "target",
+      "startDate": "2026-01-29",
+      "endDate": null,
+      "budget": 0,
+      "spent": 0,
+      "status": "active",
+      "notes": "Instagram/Facebook target reklama"
+    },
+    {
+      "id": "3",
+      "name": "Telegram",
+      "channel": "telegram",
+      "startDate": "2026-01-29",
+      "endDate": null,
+      "budget": 0,
+      "spent": 0,
+      "status": "active",
+      "notes": "Telegram kanallarga reklama"
+    }
+  ],
+  "smsBatches": [],
+  "dailyExpenses": [],
+  "lastUpdated": "2026-01-31T00:00:00Z"
+}
