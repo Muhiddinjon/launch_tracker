@@ -65,18 +65,20 @@ export default function ReactivationPage() {
     try {
       setLoading(true);
 
-      // First, fetch tracking data to get list of tracked driver IDs
+      // First, fetch tracking data to get converted driver IDs
       const trackingRes = await fetch('/api/reactivation/tracking');
       const trackingData = trackingRes.ok ? await trackingRes.json() : { entries: {}, stats: { totalCalled: 0, totalConverted: 0 } };
       setTracking(trackingData);
 
-      // Get tracked driver IDs to include converted ones
-      const trackedIds = Object.keys(trackingData.entries || {});
+      // Get only CONVERTED driver IDs to include them even if they're now active
+      const convertedIds = Object.entries(trackingData.entries || {})
+        .filter(([, entry]) => (entry as { callStatus: string }).callStatus === 'converted')
+        .map(([id]) => id);
 
-      // Fetch drivers with tracked IDs to show converted ones
+      // Fetch drivers with converted IDs
       const params = new URLSearchParams();
-      if (trackedIds.length > 0) {
-        params.append('tracked_ids', trackedIds.join(','));
+      if (convertedIds.length > 0) {
+        params.append('tracked_ids', convertedIds.join(','));
       }
 
       const driversRes = await fetch(`/api/reactivation/drivers?${params}`);
@@ -133,27 +135,26 @@ export default function ReactivationPage() {
 
   const getFilteredDrivers = () => {
     return drivers.filter(driver => {
-      // First apply status filter (driver's actual status in DB)
-      if (statusFilter !== 'all' && driver.status !== statusFilter) {
-        // Allow active drivers if they're converted
-        if (driver.status === 'active' && filter === 'converted') {
-          // continue to call status filter
-        } else {
-          return false;
-        }
-      }
-
-      // Then apply call status filter
+      // Get tracking entry
       const entry = tracking?.entries[driver.id];
       const callStatus = entry?.callStatus || 'not_called';
 
+      // For "converted" filter, show all converted drivers regardless of status filter
+      if (filter === 'converted') {
+        return callStatus === 'converted' || driver.status === 'active';
+      }
+
+      // Apply status filter (driver's actual status in DB)
+      if (statusFilter !== 'all' && driver.status !== statusFilter) {
+        return false;
+      }
+
+      // Then apply call status filter
       switch (filter) {
         case 'not_called':
           return callStatus === 'not_called';
         case 'in_progress':
           return ['called', 'no_answer', 'callback', 'interested'].includes(callStatus);
-        case 'converted':
-          return callStatus === 'converted' || driver.status === 'active';
         default:
           return true;
       }
@@ -231,7 +232,7 @@ export default function ReactivationPage() {
               onChange={(e) => setStatusFilter(e.target.value as 'all' | 'inactive' | 'pending')}
               className="text-sm border rounded-lg px-3 py-2 bg-white"
             >
-              <option value="all">Hammasi</option>
+              <option value="all">Hammasi ({drivers.length})</option>
               <option value="inactive">Inactive ({drivers.filter(d => d.status === 'inactive').length})</option>
               <option value="pending">Pending ({drivers.filter(d => d.status === 'pending').length})</option>
             </select>

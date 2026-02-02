@@ -10,18 +10,18 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const statusFilter = searchParams.get('status'); // inactive, pending, active, or null for all
-    const trackedIds = searchParams.get('tracked_ids'); // comma-separated IDs of tracked drivers
+    const trackedIds = searchParams.get('tracked_ids'); // comma-separated IDs of converted drivers
 
-    // Parse tracked driver IDs (these are drivers we've worked on)
+    // Parse tracked driver IDs (these are drivers we converted through reactivation)
     const trackedDriverIds = trackedIds ? trackedIds.split(',').filter(Boolean) : [];
 
     // Build status condition
-    // Show: inactive, pending, OR active if they're in our tracking list
+    // Show: inactive, pending, OR active ONLY if they're in our converted tracking list
     let statusCondition = '';
     if (statusFilter) {
       statusCondition = `AND c.status = '${statusFilter}'`;
     } else {
-      // Default: show inactive, pending, and active (if tracked)
+      // Default: show inactive, pending, and active (only if tracked/converted)
       if (trackedDriverIds.length > 0) {
         statusCondition = `AND (c.status IN ('inactive', 'pending') OR (c.status = 'active' AND c.id IN (${trackedDriverIds.map(id => `'${id}'`).join(',')})))`;
       } else {
