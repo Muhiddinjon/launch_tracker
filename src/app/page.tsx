@@ -2,13 +2,6 @@
 
 import { useState, useEffect } from 'react';
 
-interface InactiveReason {
-  reasonId: string;
-  reasonTitle: string;
-  count: number;
-  isFixable: boolean;
-}
-
 interface Stats {
   summary: {
     pending: number;
@@ -31,9 +24,8 @@ interface Stats {
     onTrack: boolean;
   };
   inactiveBreakdown?: {
-    reasons: InactiveReason[];
-    fixable: number;
-    notEligible: number;
+    fixable: number;       // Unique drivers with fixable reasons
+    notEligible: number;   // Unique drivers not eligible
   };
   daily: Array<{
     date: string;
@@ -438,33 +430,42 @@ export default function Dashboard() {
       </div>
 
       {/* Inactive Breakdown */}
-      {stats?.inactiveBreakdown && stats.inactiveBreakdown.reasons.length > 0 && (
+      {stats?.inactiveBreakdown && (stats.inactiveBreakdown.fixable > 0 || stats.inactiveBreakdown.notEligible > 0) && (
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h3 className="text-lg font-semibold mb-4">Inactive Driverlar Sababi</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {stats.inactiveBreakdown.reasons.map((reason) => (
-              <div
-                key={reason.reasonId}
-                className={`p-4 rounded-lg border-2 ${
-                  reason.isFixable
-                    ? 'bg-orange-50 border-orange-200'
-                    : 'bg-red-50 border-red-200'
-                }`}
-              >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {stats.inactiveBreakdown.fixable > 0 && (
+              <div className="p-4 rounded-lg border-2 bg-orange-50 border-orange-200">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-2xl">{reason.isFixable ? '📝' : '🚫'}</span>
-                  <span className={`text-2xl font-bold ${reason.isFixable ? 'text-orange-600' : 'text-red-600'}`}>
-                    {reason.count}
+                  <span className="text-2xl">📝</span>
+                  <span className="text-2xl font-bold text-orange-600">
+                    {stats.inactiveBreakdown.fixable}
                   </span>
                 </div>
-                <div className={`text-sm font-medium ${reason.isFixable ? 'text-orange-800' : 'text-red-800'}`}>
-                  {reason.reasonTitle}
+                <div className="text-sm font-medium text-orange-800">
+                  Hujjatlarda kamchilik
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {reason.isFixable ? 'Hujjatlarni tuzatib qayta murojaat qilishi mumkin' : 'Yangi mashina qo\'shishi kerak'}
+                  Hujjatlarni tuzatib qayta murojaat qilishi mumkin
                 </div>
               </div>
-            ))}
+            )}
+            {stats.inactiveBreakdown.notEligible > 0 && (
+              <div className="p-4 rounded-lg border-2 bg-red-50 border-red-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">🚫</span>
+                  <span className="text-2xl font-bold text-red-600">
+                    {stats.inactiveBreakdown.notEligible}
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-red-800">
+                  Reglamentga mos emas
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Yangi mashina qo'shishi kerak
+                </div>
+              </div>
+            )}
           </div>
           <div className="mt-4 pt-4 border-t flex justify-between text-sm">
             <span className="text-orange-600">

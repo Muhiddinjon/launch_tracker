@@ -124,27 +124,39 @@ export async function GET(request: NextRequest) {
       ORDER BY total DESC
     `;
 
-    // 7. Inactive drivers breakdown by reason
-    const inactiveReasonsQuery = `
-      SELECT
-        r.id as reason_id,
-        r.title->>'uz' as reason_title,
-        COUNT(DISTINCT c.id) as count
+    // 7. Inactive drivers breakdown by reason CATEGORY (unique drivers per category)
+    // Fixable: drivers with reason 59 OR 60 (shaxsiy/mashina ma'lumotlarida xatolik)
+    const fixableDriversQuery = `
+      SELECT COUNT(DISTINCT c.id) as count
       FROM customers c
       JOIN driver_infos di ON c.id = di.customer_id
       JOIN customer_moderation_reasons cmr ON c.id = cmr.customer_id
-      JOIN reasons r ON cmr.reason_id = r.id
       WHERE c.role_id = '2'
         AND c.status = 'inactive'
         AND c.created_at >= $1
-        AND r.id IN ($4, $5, $6)
+        AND cmr.reason_id IN ($4, $5)
         AND (
           (di.departure_region_id = $2 AND di.arrival_region_id = $3)
           OR
           (di.departure_region_id = $3 AND di.arrival_region_id = $2)
         )
-      GROUP BY r.id, r.title
-      ORDER BY count DESC
+    `;
+
+    // Not eligible: drivers with reason 65 (reglamentga mos emas)
+    const notEligibleDriversQuery = `
+      SELECT COUNT(DISTINCT c.id) as count
+      FROM customers c
+      JOIN driver_infos di ON c.id = di.customer_id
+      JOIN customer_moderation_reasons cmr ON c.id = cmr.customer_id
+      WHERE c.role_id = '2'
+        AND c.status = 'inactive'
+        AND c.created_at >= $1
+        AND cmr.reason_id = $4
+        AND (
+          (di.departure_region_id = $2 AND di.arrival_region_id = $3)
+          OR
+          (di.departure_region_id = $3 AND di.arrival_region_id = $2)
+        )
     `;
 
     // 8. Reactivated OLD drivers (created BEFORE campaign, now ACTIVE)
@@ -167,19 +179,24 @@ export async function GET(request: NextRequest) {
         )
     `;
 
-    const [pendingResult, activeResult, blockedResult, inactiveResult, dailyResult, subRegionResult, inactiveReasonsResult, reactivatedResult] = await Promise.all([
+    const [pendingResult, activeResult, blockedResult, inactiveResult, dailyResult, subRegionResult, fixableResult, notEligibleResult, reactivatedResult] = await Promise.all([
       pool.query(pendingQuery, [fromDate, TASHKENT_REGION_ID, TASHKENT_CITY_ID]),
       pool.query(activeQuery, [fromDate, TASHKENT_REGION_ID, TASHKENT_CITY_ID]),
       pool.query(blockedQuery, [fromDate, TASHKENT_REGION_ID, TASHKENT_CITY_ID]),
       pool.query(inactiveQuery, [fromDate, TASHKENT_REGION_ID, TASHKENT_CITY_ID]),
       pool.query(dailyQuery, [fromDate, TASHKENT_REGION_ID, TASHKENT_CITY_ID]),
       pool.query(subRegionQuery, [fromDate, TASHKENT_REGION_ID, TASHKENT_CITY_ID]),
-      pool.query(inactiveReasonsQuery, [
+      pool.query(fixableDriversQuery, [
         fromDate,
         TASHKENT_REGION_ID,
         TASHKENT_CITY_ID,
         INACTIVE_REASONS.PERSONAL_INFO_ERROR,
         INACTIVE_REASONS.CAR_INFO_ERROR,
+      ]),
+      pool.query(notEligibleDriversQuery, [
+        fromDate,
+        TASHKENT_REGION_ID,
+        TASHKENT_CITY_ID,
         INACTIVE_REASONS.CAR_NOT_ELIGIBLE,
       ]),
       pool.query(reactivatedQuery, [fromDate, TASHKENT_REGION_ID, TASHKENT_CITY_ID]),
@@ -193,21 +210,9 @@ export async function GET(request: NextRequest) {
     // For accurate tracking of campaign conversions, use Redis tracking data
     const oldActiveCount = parseInt(reactivatedResult.rows[0]?.count || '0');
 
-    // Process inactive reasons
-    const inactiveReasons = inactiveReasonsResult.rows.map(row => ({
-      reasonId: row.reason_id,
-      reasonTitle: row.reason_title,
-      count: parseInt(row.count || '0'),
-      isFixable: INACTIVE_REASON_CATEGORIES.FIXABLE.includes(row.reason_id),
-    }));
-
-    // Calculate fixable vs not eligible
-    const fixableCount = inactiveReasons
-      .filter(r => r.isFixable)
-      .reduce((sum, r) => sum + r.count, 0);
-    const notEligibleCount = inactiveReasons
-      .filter(r => !r.isFixable)
-      .reduce((sum, r) => sum + r.count, 0);
+    // Get unique driver counts per category
+    const fixableCount = parseInt(fixableResult.rows[0]?.count || '0');
+    const notEligibleCount = parseInt(notEligibleResult.rows[0]?.count || '0');
 
     // Calculate campaign metrics (from campaign start date, not data start date)
     const campaignStart = new Date(CAMPAIGN_START_DATE);
@@ -253,9 +258,8 @@ export async function GET(request: NextRequest) {
         onTrack,
       },
       inactiveBreakdown: {
-        reasons: inactiveReasons,
-        fixable: fixableCount,        // Hujjatlarda kamchilik - tuzatilishi mumkin
-        notEligible: notEligibleCount, // Reglamentga mos emas
+        fixable: fixableCount,        // Unique drivers with fixable reasons (59, 60)
+        notEligible: notEligibleCount, // Unique drivers with not eligible reason (65)
       },
       daily: dailyResult.rows,
       subRegions: subRegionResult.rows,
