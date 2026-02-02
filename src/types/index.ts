@@ -1,6 +1,13 @@
 // Driver Types
 export type DriverStatus = 'pending' | 'active' | 'inactive' | 'blocked';
 
+// Driver's inactive reason (for individual driver)
+export interface DriverInactiveReason {
+  reason_id: string;
+  reason_title: string;
+  isFixable: boolean;
+}
+
 export interface Driver {
   id: string;
   first_name: string;
@@ -20,6 +27,7 @@ export interface Driver {
   arrival_region_name: string | null;
   arrival_sub_region_id: string | null;
   arrival_sub_region_name: string | null;
+  inactive_reasons?: DriverInactiveReason[] | null;  // Only for inactive drivers
 }
 
 // Region Types
@@ -89,9 +97,24 @@ export interface SubRegionStats {
   total: number;
 }
 
+// Inactive Reason Types
+export interface InactiveReason {
+  reasonId: string;
+  reasonTitle: string;
+  count: number;
+  isFixable: boolean;  // true = hujjat xatosi (tuzatilishi mumkin), false = reglamentga mos emas
+}
+
+export interface InactiveBreakdown {
+  reasons: InactiveReason[];
+  fixable: number;      // Hujjatlarda kamchilik - tuzatilishi mumkin (59, 60)
+  notEligible: number;  // Reglamentga mos emas - yangi mashina kerak (65)
+}
+
 export interface StatsResponse {
   summary: StatusSummary;
   target: CampaignTarget;
+  inactiveBreakdown: InactiveBreakdown;
   daily: DailyStats[];
   subRegions: SubRegionStats[];
   meta: {

@@ -13,12 +13,14 @@ interface DriverTableProps {
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   active: 'bg-green-100 text-green-800',
+  inactive: 'bg-gray-100 text-gray-800',
   blocked: 'bg-red-100 text-red-800',
 };
 
 const statusLabels: Record<string, string> = {
   pending: 'Pending',
   active: 'Active',
+  inactive: 'Inactive',
   blocked: 'Blocked',
 };
 
@@ -117,10 +119,29 @@ export default function DriverTable({ drivers, sortBy, sortOrder, onSort, loadin
               <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                 {driver.phone_number}
               </td>
-              <td className="px-4 py-4 whitespace-nowrap">
-                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[driver.status]}`}>
-                  {statusLabels[driver.status]}
-                </span>
+              <td className="px-4 py-4">
+                <div className="flex flex-col gap-1">
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full w-fit ${statusColors[driver.status]}`}>
+                    {statusLabels[driver.status]}
+                  </span>
+                  {driver.status === 'inactive' && driver.inactive_reasons && driver.inactive_reasons.length > 0 && (
+                    <div className="flex flex-col gap-0.5">
+                      {driver.inactive_reasons.map((reason, idx) => (
+                        <span
+                          key={idx}
+                          className={`text-xs px-1.5 py-0.5 rounded ${
+                            reason.isFixable
+                              ? 'bg-orange-50 text-orange-700'
+                              : 'bg-red-50 text-red-700'
+                          }`}
+                          title={reason.reason_title}
+                        >
+                          {reason.isFixable ? '📝' : '🚫'} {reason.reason_title.length > 25 ? reason.reason_title.substring(0, 25) + '...' : reason.reason_title}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </td>
               <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                 <div>{driver.region_name || '-'}</div>

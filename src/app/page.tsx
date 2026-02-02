@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from 'react';
 
+interface InactiveReason {
+  reasonId: string;
+  reasonTitle: string;
+  count: number;
+  isFixable: boolean;
+}
+
 interface Stats {
   summary: {
     pending: number;
@@ -22,6 +29,11 @@ interface Stats {
     expectedByToday: number;
     difference: number;
     onTrack: boolean;
+  };
+  inactiveBreakdown?: {
+    reasons: InactiveReason[];
+    fixable: number;
+    notEligible: number;
   };
   daily: Array<{
     date: string;
@@ -61,9 +73,23 @@ interface CampaignData {
   }>;
 }
 
+interface ReactivationStats {
+  trackingStats: {
+    totalCalled: number;
+    totalConverted: number;
+  };
+  driverSummary: {
+    total: number;
+    inactive: number;
+    active: number;
+    pending: number;
+  };
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignData | null>(null);
+  const [reactivation, setReactivation] = useState<ReactivationStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,18 +100,26 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [statsRes, campaignsRes] = await Promise.all([
+      const [statsRes, campaignsRes, trackingRes, driversRes] = await Promise.all([
         fetch('/api/stats/tashkent-region?from_date=2026-01-26'),
         fetch('/api/campaigns'),
+        fetch('/api/reactivation/tracking'),
+        fetch('/api/reactivation/drivers'),
       ]);
 
       if (!statsRes.ok) throw new Error('Failed to fetch stats');
 
       const statsData = await statsRes.json();
       const campaignsData = campaignsRes.ok ? await campaignsRes.json() : { campaigns: [], dailyExpenses: [] };
+      const trackingData = trackingRes.ok ? await trackingRes.json() : { stats: { totalCalled: 0, totalConverted: 0 } };
+      const driversData = driversRes.ok ? await driversRes.json() : { summary: { total: 0, inactive: 0, active: 0, pending: 0 } };
 
       setStats(statsData);
       setCampaigns(campaignsData);
+      setReactivation({
+        trackingStats: trackingData.stats,
+        driverSummary: driversData.summary,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -125,6 +159,22 @@ export default function Dashboard() {
 
   const totalSpent = campaigns?.campaigns.reduce((sum, c) => sum + c.spent, 0) || 0;
 
+  // Calculate combined active: new active + reactivated (from Redis tracking)
+  const newActive = stats?.summary.active || 0;
+  const reactivatedActive = reactivation?.trackingStats.totalConverted || 0;
+  const combinedActive = newActive + reactivatedActive;
+
+  // Recalculate target metrics with combined active
+  const targetGoal = stats?.target.goal || 250;
+  const combinedProgress = (combinedActive / targetGoal) * 100;
+  const daysRemaining = stats?.target.daysRemaining || 25;
+  const combinedDailyRequired = daysRemaining > 0 ? (targetGoal - combinedActive) / daysRemaining : 0;
+  const daysPassed = stats?.target.daysPassed || 1;
+  const combinedCurrentRate = daysPassed > 0 ? combinedActive / daysPassed : 0;
+  const expectedByToday = stats?.target.expectedByToday || 0;
+  const combinedDifference = combinedActive - expectedByToday;
+  const combinedOnTrack = combinedDifference >= 0;
+
   // Calculate daily growth
   const dailyData = stats?.daily || [];
   const todayData = dailyData[dailyData.length - 1];
@@ -160,15 +210,14 @@ export default function Dashboard() {
           <div className="flex justify-between items-start">
             <div>
               <div className="text-sm font-medium text-gray-500">ACTIVE</div>
-              <div className="text-3xl font-bold text-green-600">{stats?.summary.active}</div>
+              <div className="text-3xl font-bold text-green-600">{combinedActive}</div>
             </div>
             <span className="text-2xl">✅</span>
           </div>
-          <div className="mt-2 text-xs text-gray-400">
-            {dailyGrowth >= 0 ? (
-              <span className="text-green-600">+{dailyGrowth} bugun</span>
-            ) : (
-              <span className="text-red-600">{dailyGrowth} bugun</span>
+          <div className="mt-2 text-xs space-y-0.5">
+            <div className="text-gray-500">Yangi: <span className="text-green-600 font-medium">{newActive}</span></div>
+            {reactivatedActive > 0 && (
+              <div className="text-gray-500">Reaktivatsiya: <span className="text-purple-600 font-medium">+{reactivatedActive}</span></div>
             )}
           </div>
         </div>
@@ -181,7 +230,16 @@ export default function Dashboard() {
             </div>
             <span className="text-2xl">💤</span>
           </div>
-          <div className="mt-2 text-xs text-gray-400">Faol emas</div>
+          {stats?.inactiveBreakdown && (stats.inactiveBreakdown.fixable > 0 || stats.inactiveBreakdown.notEligible > 0) && (
+            <div className="mt-2 text-xs space-y-1">
+              {stats.inactiveBreakdown.fixable > 0 && (
+                <div className="text-orange-600">📝 Tuzatilishi mumkin: {stats.inactiveBreakdown.fixable}</div>
+              )}
+              {stats.inactiveBreakdown.notEligible > 0 && (
+                <div className="text-red-500">🚫 Mos emas: {stats.inactiveBreakdown.notEligible}</div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
@@ -209,26 +267,26 @@ export default function Dashboard() {
 
       {/* Daily Progress Status - Visual Progress Bar */}
       <div className={`rounded-lg shadow p-6 mb-6 ${
-        stats?.target.onTrack
+        combinedOnTrack
           ? 'bg-green-50 border-2 border-green-200'
           : 'bg-red-50 border-2 border-red-200'
       }`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">{stats?.target.onTrack ? '✅' : '⚠️'}</span>
+            <span className="text-3xl">{combinedOnTrack ? '✅' : '⚠️'}</span>
             <div>
-              <h3 className={`text-lg font-bold ${stats?.target.onTrack ? 'text-green-700' : 'text-red-700'}`}>
-                Day {stats?.target.daysPassed} / 30
+              <h3 className={`text-lg font-bold ${combinedOnTrack ? 'text-green-700' : 'text-red-700'}`}>
+                Day {daysPassed} / 30
               </h3>
               <p className="text-sm text-gray-600">
-                {stats?.target.onTrack ? 'Grafikda!' : 'Grafikdan orqada'}
+                {combinedOnTrack ? 'Grafikda!' : 'Grafikdan orqada'}
               </p>
             </div>
           </div>
           <div className={`text-4xl font-bold ${
-            (stats?.target.difference || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+            combinedDifference >= 0 ? 'text-green-600' : 'text-red-600'
           }`}>
-            {(stats?.target.difference || 0) >= 0 ? '+' : ''}{stats?.target.difference}
+            {combinedDifference >= 0 ? '+' : ''}{combinedDifference}
           </div>
         </div>
 
@@ -240,21 +298,21 @@ export default function Dashboard() {
               <div className="w-full bg-gray-200 rounded-full h-8 relative overflow-hidden">
                 <div
                   className={`h-8 rounded-full transition-all flex items-center justify-end pr-2 ${
-                    stats?.target.onTrack ? 'bg-green-500' : 'bg-red-400'
+                    combinedOnTrack ? 'bg-green-500' : 'bg-red-400'
                   }`}
                   style={{
-                    width: `${Math.min(((stats?.summary.active || 0) / (stats?.target.expectedByToday || 1)) * 100, 100)}%`
+                    width: `${Math.min((combinedActive / (expectedByToday || 1)) * 100, 100)}%`
                   }}
                 >
-                  <span className="text-white font-bold text-sm">{stats?.summary.active}</span>
+                  <span className="text-white font-bold text-sm">{combinedActive}</span>
                 </div>
               </div>
               <div className="flex justify-between mt-1 text-xs">
                 <span className="text-gray-400">0</span>
                 <span className="text-gray-600 font-medium">
-                  {Math.round(((stats?.summary.active || 0) / (stats?.target.expectedByToday || 1)) * 100)}% of today&apos;s target
+                  {Math.round((combinedActive / (expectedByToday || 1)) * 100)}% of today&apos;s target
                 </span>
-                <span className="text-gray-900 font-bold">{stats?.target.expectedByToday}</span>
+                <span className="text-gray-900 font-bold">{expectedByToday}</span>
               </div>
             </div>
           </div>
@@ -263,18 +321,18 @@ export default function Dashboard() {
         {/* Stats row */}
         <div className="mt-4 grid grid-cols-4 gap-4 pt-4 border-t border-gray-200">
           <div className="text-center">
-            <div className="text-xl font-bold text-gray-900">{stats?.target.expectedByToday}</div>
+            <div className="text-xl font-bold text-gray-900">{expectedByToday}</div>
             <div className="text-xs text-gray-500">Bugun bo'lishi kerak</div>
           </div>
           <div className="text-center">
-            <div className="text-xl font-bold text-gray-900">{stats?.target.currentRate}</div>
+            <div className="text-xl font-bold text-gray-900">{Math.round(combinedCurrentRate * 10) / 10}</div>
             <div className="text-xs text-gray-500">O'rtacha/kun</div>
           </div>
           <div className="text-center">
             <div className={`text-xl font-bold ${
-              (stats?.target.dailyRequired || 0) <= (stats?.target.dailyTarget || 10) ? 'text-green-600' : 'text-red-600'
+              combinedDailyRequired <= (stats?.target.dailyTarget || 10) ? 'text-green-600' : 'text-red-600'
             }`}>
-              {stats?.target.dailyRequired}
+              {Math.round(combinedDailyRequired * 10) / 10}
             </div>
             <div className="text-xs text-gray-500">Kerak/kun (qolgan)</div>
           </div>
@@ -378,6 +436,127 @@ export default function Dashboard() {
           </a>
         </div>
       </div>
+
+      {/* Inactive Breakdown */}
+      {stats?.inactiveBreakdown && stats.inactiveBreakdown.reasons.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Inactive Driverlar Sababi</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {stats.inactiveBreakdown.reasons.map((reason) => (
+              <div
+                key={reason.reasonId}
+                className={`p-4 rounded-lg border-2 ${
+                  reason.isFixable
+                    ? 'bg-orange-50 border-orange-200'
+                    : 'bg-red-50 border-red-200'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">{reason.isFixable ? '📝' : '🚫'}</span>
+                  <span className={`text-2xl font-bold ${reason.isFixable ? 'text-orange-600' : 'text-red-600'}`}>
+                    {reason.count}
+                  </span>
+                </div>
+                <div className={`text-sm font-medium ${reason.isFixable ? 'text-orange-800' : 'text-red-800'}`}>
+                  {reason.reasonTitle}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {reason.isFixable ? 'Hujjatlarni tuzatib qayta murojaat qilishi mumkin' : 'Yangi mashina qo\'shishi kerak'}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 pt-4 border-t flex justify-between text-sm">
+            <span className="text-orange-600">
+              <strong>📝 Tuzatilishi mumkin:</strong> {stats.inactiveBreakdown.fixable} ta driver
+            </span>
+            <span className="text-red-600">
+              <strong>🚫 Reglamentga mos emas:</strong> {stats.inactiveBreakdown.notEligible} ta driver
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivation Section */}
+      {reactivation && reactivation.driverSummary.total > 0 && (
+        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg shadow p-6 mb-6 border-2 border-purple-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">🔄</span>
+              <div>
+                <h3 className="text-lg font-semibold text-purple-900">Reaktivatsiya (Eski Driverlar)</h3>
+                <p className="text-sm text-purple-600">26.01 dan oldin ro'yxatdan o'tgan driverlar</p>
+              </div>
+            </div>
+            <a
+              href="/reactivation"
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition"
+            >
+              Batafsil →
+            </a>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Jami eski</div>
+              <div className="text-2xl font-bold text-purple-600">{reactivation.driverSummary.total}</div>
+              <div className="text-xs text-gray-400">inactive/pending</div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Qo'ng'iroq qilindi</div>
+              <div className="text-2xl font-bold text-blue-600">{reactivation.trackingStats.totalCalled}</div>
+              <div className="text-xs text-gray-400">
+                {reactivation.driverSummary.total > 0
+                  ? `${Math.round((reactivation.trackingStats.totalCalled / reactivation.driverSummary.total) * 100)}%`
+                  : '0%'}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Converted</div>
+              <div className="text-2xl font-bold text-green-600">{reactivation.trackingStats.totalConverted}</div>
+              <div className="text-xs text-green-500">active bo'ldi</div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Inactive</div>
+              <div className="text-2xl font-bold text-gray-600">{reactivation.driverSummary.inactive}</div>
+              <div className="text-xs text-gray-400">qoldi</div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Pending</div>
+              <div className="text-2xl font-bold text-yellow-600">{reactivation.driverSummary.pending}</div>
+              <div className="text-xs text-gray-400">kutilmoqda</div>
+            </div>
+          </div>
+
+          {/* Conversion rate bar */}
+          {reactivation.trackingStats.totalCalled > 0 && (
+            <div className="mt-4 pt-4 border-t border-purple-200">
+              <div className="flex items-center justify-between text-sm mb-2">
+                <span className="text-purple-700">Konversiya darajasi</span>
+                <span className="font-bold text-purple-900">
+                  {reactivation.trackingStats.totalCalled > 0
+                    ? `${Math.round((reactivation.trackingStats.totalConverted / reactivation.trackingStats.totalCalled) * 100)}%`
+                    : '0%'}
+                </span>
+              </div>
+              <div className="w-full bg-purple-200 rounded-full h-3">
+                <div
+                  className="bg-green-500 h-3 rounded-full transition-all"
+                  style={{
+                    width: `${reactivation.trackingStats.totalCalled > 0
+                      ? (reactivation.trackingStats.totalConverted / reactivation.trackingStats.totalCalled) * 100
+                      : 0}%`
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Sub-regions */}
       <div className="bg-white rounded-lg shadow p-6">

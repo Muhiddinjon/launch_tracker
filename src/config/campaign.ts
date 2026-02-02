@@ -28,6 +28,26 @@ export const DRIVER_STATUSES = {
   BLOCKED: 'blocked',
 } as const;
 
+// Inactive reason IDs and their meanings
+export const INACTIVE_REASONS = {
+  PERSONAL_INFO_ERROR: '59',    // Shaxsiy ma'lumotlarda xatolik - tuzatilishi mumkin
+  CAR_INFO_ERROR: '60',         // Mashina ma'lumotlarida xatolik - tuzatilishi mumkin
+  CAR_NOT_ELIGIBLE: '65',       // Reglamentga mos emas - yangi mashina kerak
+} as const;
+
+// Reason categories
+export const INACTIVE_REASON_CATEGORIES = {
+  FIXABLE: ['59', '60'],        // Hujjatlarda kamchilik - tuzatilishi mumkin
+  NOT_ELIGIBLE: ['65'],         // Reglamentga mos emas - yangi mashina kerak
+} as const;
+
+// Reason labels for UI
+export const INACTIVE_REASON_LABELS: Record<string, string> = {
+  '59': 'Shaxsiy ma\'lumotlarda xatolik',
+  '60': 'Mashina ma\'lumotlarida xatolik',
+  '65': 'Reglamentga mos emas',
+} as const;
+
 export type DriverStatus = (typeof DRIVER_STATUSES)[keyof typeof DRIVER_STATUSES];
 
 // Calculate daily target

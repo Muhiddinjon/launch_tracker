@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { CAMPAIGN_CONFIG } from '@/config/campaign';
+import { CAMPAIGN_CONFIG, INACTIVE_REASON_CATEGORIES } from '@/config/campaign';
 
 const { TASHKENT_CITY_ID: TASHKENT_REGION_ID } = CAMPAIGN_CONFIG; // For route filter, city is the endpoint
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
     const sortColumn = allowedSortColumns.includes(sortBy) ? sortBy : 'created_at';
     const sortDir = sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-    // Main query
+    // Main query with inactive reason
     const query = `
       SELECT
         c.id,
@@ -98,7 +98,17 @@ export async function GET(request: NextRequest) {
         arr_r.id as arrival_region_id,
         arr_r.name->>'uz' as arrival_region_name,
         arr_sr.id as arrival_sub_region_id,
-        arr_sr.name->>'uz' as arrival_sub_region_name
+        arr_sr.name->>'uz' as arrival_sub_region_name,
+        (
+          SELECT json_agg(json_build_object(
+            'reason_id', cmr_r.id,
+            'reason_title', cmr_r.title->>'uz'
+          ))
+          FROM customer_moderation_reasons cmr
+          JOIN reasons cmr_r ON cmr.reason_id = cmr_r.id
+          WHERE cmr.customer_id = c.id
+            AND cmr_r.id IN ('59', '60', '65')
+        ) as inactive_reasons
       FROM customers c
       LEFT JOIN driver_infos di ON c.id = di.customer_id
       LEFT JOIN regions r ON di.region_id = r.id
@@ -134,8 +144,21 @@ export async function GET(request: NextRequest) {
     const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
+    // Process data to add isFixable flag for inactive reasons
+    const fixableReasonIds = INACTIVE_REASON_CATEGORIES.FIXABLE as readonly string[];
+    const processedData = dataResult.rows.map(row => {
+      if (row.inactive_reasons && Array.isArray(row.inactive_reasons)) {
+        const reasons = row.inactive_reasons.map((r: { reason_id: string; reason_title: string }) => ({
+          ...r,
+          isFixable: fixableReasonIds.includes(r.reason_id),
+        }));
+        return { ...row, inactive_reasons: reasons };
+      }
+      return row;
+    });
+
     return NextResponse.json({
-      data: dataResult.rows,
+      data: processedData,
       pagination: {
         page,
         limit,
