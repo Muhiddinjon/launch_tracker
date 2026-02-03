@@ -55,7 +55,7 @@ export default function ReactivationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'not_called' | 'in_progress' | 'converted'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'inactive' | 'pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'inactive' | 'pending' | 'active'>('all');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -65,23 +65,17 @@ export default function ReactivationPage() {
     try {
       setLoading(true);
 
-      // First, fetch tracking data to get converted driver IDs
-      const trackingRes = await fetch('/api/reactivation/tracking');
-      const trackingData = trackingRes.ok ? await trackingRes.json() : { entries: {}, stats: { totalCalled: 0, totalConverted: 0 } };
+      // Fetch tracking data and drivers in parallel
+      const [trackingRes, driversRes] = await Promise.all([
+        fetch('/api/reactivation/tracking'),
+        fetch('/api/reactivation/drivers'), // API auto-syncs new drivers to Redis
+      ]);
+
+      const trackingData = trackingRes.ok
+        ? await trackingRes.json()
+        : { entries: {}, stats: { totalCalled: 0, totalConverted: 0 } };
       setTracking(trackingData);
 
-      // Get only CONVERTED driver IDs to include them even if they're now active
-      const convertedIds = Object.entries(trackingData.entries || {})
-        .filter(([, entry]) => (entry as { callStatus: string }).callStatus === 'converted')
-        .map(([id]) => id);
-
-      // Fetch drivers with converted IDs
-      const params = new URLSearchParams();
-      if (convertedIds.length > 0) {
-        params.append('tracked_ids', convertedIds.join(','));
-      }
-
-      const driversRes = await fetch(`/api/reactivation/drivers?${params}`);
       if (!driversRes.ok) throw new Error('Failed to fetch drivers');
 
       const driversData = await driversRes.json();
@@ -119,6 +113,12 @@ export default function ReactivationPage() {
         entries: { ...prev.entries, [driverId]: data.entry },
         stats: data.stats,
       } : null);
+
+      // If marked as converted, refresh the entire drivers list
+      // This ensures we see the driver even if their DB status changed to active
+      if (callStatus === 'converted') {
+        await fetchData();
+      }
     } catch (err) {
       alert('Xatolik: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
@@ -229,12 +229,13 @@ export default function ReactivationPage() {
             <span className="text-sm text-gray-500">Driver holati:</span>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'inactive' | 'pending')}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'inactive' | 'pending' | 'active')}
               className="text-sm border rounded-lg px-3 py-2 bg-white"
             >
               <option value="all">Hammasi ({drivers.length})</option>
               <option value="inactive">Inactive ({drivers.filter(d => d.status === 'inactive').length})</option>
               <option value="pending">Pending ({drivers.filter(d => d.status === 'pending').length})</option>
+              <option value="active">Active ({drivers.filter(d => d.status === 'active').length})</option>
             </select>
           </div>
 
