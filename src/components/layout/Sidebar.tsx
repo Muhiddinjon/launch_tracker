@@ -7,6 +7,7 @@ const menuItems = [
   { href: '/', label: 'Dashboard', icon: '📊' },
   { href: '/drivers', label: 'Drivers', icon: '👥' },
   { href: '/reactivation', label: 'Reaktivatsiya', icon: '🔄' },
+  { href: '/budget', label: 'Budjet', icon: '💰' },
   { href: '/campaigns', label: 'Campaigns', icon: '📢' },
   { href: '/sms', label: 'SMS Matching', icon: '📱' },
 ];

@@ -78,10 +78,30 @@ interface ReactivationStats {
   };
 }
 
+interface AllRegionsStats {
+  summary: {
+    pending: number;
+    active: number;
+    blocked: number;
+    inactive: number;
+    total: number;
+  };
+  byRegion: Array<{
+    region_id: string;
+    region_name: string;
+    pending: number;
+    active: number;
+    blocked: number;
+    inactive: number;
+    total: number;
+  }>;
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignData | null>(null);
   const [reactivation, setReactivation] = useState<ReactivationStats | null>(null);
+  const [allRegions, setAllRegions] = useState<AllRegionsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,11 +112,12 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [statsRes, campaignsRes, trackingRes, driversRes] = await Promise.all([
+      const [statsRes, campaignsRes, trackingRes, driversRes, allRegionsRes] = await Promise.all([
         fetch('/api/stats/tashkent-region?from_date=2026-01-26'),
         fetch('/api/campaigns'),
         fetch('/api/reactivation/tracking'),
         fetch('/api/reactivation/drivers'),
+        fetch('/api/stats/all-regions?from_date=2026-01-26'),
       ]);
 
       if (!statsRes.ok) throw new Error('Failed to fetch stats');
@@ -105,6 +126,7 @@ export default function Dashboard() {
       const campaignsData = campaignsRes.ok ? await campaignsRes.json() : { campaigns: [], dailyExpenses: [] };
       const trackingData = trackingRes.ok ? await trackingRes.json() : { stats: { totalCalled: 0, totalConverted: 0 } };
       const driversData = driversRes.ok ? await driversRes.json() : { summary: { total: 0, inactive: 0, active: 0, pending: 0 } };
+      const allRegionsData = allRegionsRes.ok ? await allRegionsRes.json() : null;
 
       setStats(statsData);
       setCampaigns(campaignsData);
@@ -112,6 +134,7 @@ export default function Dashboard() {
         trackingStats: trackingData.stats,
         driverSummary: driversData.summary,
       });
+      setAllRegions(allRegionsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -560,7 +583,7 @@ export default function Dashboard() {
       )}
 
       {/* Sub-regions */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
         <h3 className="text-lg font-semibold mb-4">Tumanlar bo'yicha</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {stats?.subRegions.slice(0, 12).map((sr, index) => (
@@ -575,6 +598,63 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* All Regions Stats */}
+      {allRegions && (
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg shadow p-6 border-2 border-blue-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">🌍</span>
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900">Barcha Viloyatlar</h3>
+                <p className="text-sm text-blue-600">Umumiy statistika - barcha yo'nalishlar</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Overall stats */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Jami</div>
+              <div className="text-2xl font-bold text-gray-900">{allRegions.summary.total}</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Pending</div>
+              <div className="text-2xl font-bold text-yellow-600">{allRegions.summary.pending}</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Active</div>
+              <div className="text-2xl font-bold text-green-600">{allRegions.summary.active}</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Inactive</div>
+              <div className="text-2xl font-bold text-gray-600">{allRegions.summary.inactive}</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-500">Blocked</div>
+              <div className="text-2xl font-bold text-red-600">{allRegions.summary.blocked}</div>
+            </div>
+          </div>
+
+          {/* By Region breakdown */}
+          <h4 className="text-sm font-semibold text-blue-800 mb-3">Viloyatlar bo'yicha</h4>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {allRegions.byRegion.slice(0, 12).map((region, index) => (
+              <div key={region.region_id || `region-${index}`} className="bg-white p-3 rounded-lg shadow-sm">
+                <div className="text-sm font-medium text-gray-900 truncate mb-2">
+                  {region.region_name || "Noma'lum"}
+                </div>
+                <div className="flex gap-2 flex-wrap text-xs">
+                  <span className="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">P:{region.pending}</span>
+                  <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded">A:{region.active}</span>
+                  <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">I:{region.inactive}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">Jami: {region.total}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -20,6 +20,46 @@ export const CAMPAIGN_CONFIG = {
   UTC_OFFSET_HOURS: 5,
 } as const;
 
+// Budget Configuration
+export const BUDGET_CONFIG = {
+  // Total budget in USD
+  TOTAL_BUDGET_USD: 2200,
+
+  // Category configurations
+  CATEGORIES: {
+    ADS: {
+      id: 'ads',
+      name: 'Target reklama',
+      dailyBudget: 40, // $40/kun
+      currency: 'USD',
+    },
+    SMS: {
+      id: 'sms',
+      name: 'SMS xabarlar',
+      costPerUnit: 19, // 19 so'm/sms
+      currency: 'UZS',
+      baseCount: 130000, // Baza hajmi
+    },
+    FLYERS: {
+      id: 'flyers',
+      name: 'Flayerlar',
+      totalBudget: 325, // $300-350 oralig'ida
+      currency: 'USD',
+    },
+    TELEGRAM: {
+      id: 'telegram',
+      name: 'Telegram reklama',
+      currency: 'USD',
+    },
+  },
+
+  // Exchange rate (approximate)
+  USD_TO_UZS: 12800,
+} as const;
+
+// Budget category type
+export type BudgetCategoryId = 'ads' | 'sms' | 'flyers' | 'telegram';
+
 // Driver statuses
 export const DRIVER_STATUSES = {
   PENDING: 'pending',

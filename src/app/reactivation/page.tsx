@@ -65,10 +65,9 @@ export default function ReactivationPage() {
     try {
       setLoading(true);
 
-      // Fetch tracking data and drivers in parallel
       const [trackingRes, driversRes] = await Promise.all([
         fetch('/api/reactivation/tracking'),
-        fetch('/api/reactivation/drivers'), // API auto-syncs new drivers to Redis
+        fetch('/api/reactivation/drivers'),
       ]);
 
       const trackingData = trackingRes.ok
@@ -114,8 +113,6 @@ export default function ReactivationPage() {
         stats: data.stats,
       } : null);
 
-      // If marked as converted, refresh the entire drivers list
-      // This ensures we see the driver even if their DB status changed to active
       if (callStatus === 'converted') {
         await fetchData();
       }
@@ -135,21 +132,17 @@ export default function ReactivationPage() {
 
   const getFilteredDrivers = () => {
     return drivers.filter(driver => {
-      // Get tracking entry
       const entry = tracking?.entries[driver.id];
       const callStatus = entry?.callStatus || 'not_called';
 
-      // For "converted" filter, show all converted drivers regardless of status filter
       if (filter === 'converted') {
         return callStatus === 'converted' || driver.status === 'active';
       }
 
-      // Apply status filter (driver's actual status in DB)
       if (statusFilter !== 'all' && driver.status !== statusFilter) {
         return false;
       }
 
-      // Then apply call status filter
       switch (filter) {
         case 'not_called':
           return callStatus === 'not_called';
@@ -158,14 +151,6 @@ export default function ReactivationPage() {
         default:
           return true;
       }
-    });
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('uz-UZ', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
     });
   };
 
