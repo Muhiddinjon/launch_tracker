@@ -13,7 +13,7 @@ export const CAMPAIGN_CONFIG = {
 
   // Campaign targets
   CAMPAIGN_DURATION: 30,              // Kampaniya davomiyligi (kun)
-  TARGET_ACTIVE_DRIVERS: 250,         // Maqsad: active driverlar soni
+  TARGET_ACTIVE_DRIVERS: 300,         // Maqsad: active driverlar soni
 
   // Timezone
   TIMEZONE: 'Asia/Tashkent',

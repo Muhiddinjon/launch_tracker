@@ -51,7 +51,7 @@ export default function Sidebar() {
       <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800">
         <div className="text-xs text-gray-400">
           <div>Campaign: 29.01 - 27.02.2026</div>
-          <div>Target: 250 Active Drivers</div>
+          <div>Target: 300 Active Drivers</div>
         </div>
       </div>
     </div>
