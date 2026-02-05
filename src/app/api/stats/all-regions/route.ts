@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const fromDate = searchParams.get('from_date') || DATA_START_DATE;
 
-    // 1. Overall stats - ALL drivers, ALL regions
+    // 1. Overall stats - ALL drivers, excluding Toshkent city routes
     const overallQuery = `
       SELECT
         COUNT(*) FILTER (WHERE c.status = 'pending') as pending,
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       JOIN driver_infos di ON c.id = di.customer_id
       WHERE c.role_id = '2'
         AND c.created_at >= $1
+        AND (di.departure_region_id != $2 OR di.arrival_region_id != $2)
     `;
 
     // 2. Stats by region (where region is either departure OR arrival)
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
       ORDER BY active DESC, total DESC
     `;
 
-    // 3. Daily breakdown - ALL regions
+    // 3. Daily breakdown - excluding Toshkent city
     const dailyQuery = `
       SELECT
         DATE(c.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent') as date,
@@ -74,11 +75,12 @@ export async function GET(request: NextRequest) {
       JOIN driver_infos di ON c.id = di.customer_id
       WHERE c.role_id = '2'
         AND c.created_at >= $1
+        AND (di.departure_region_id != $2 OR di.arrival_region_id != $2)
       GROUP BY DATE(c.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent')
       ORDER BY date
     `;
 
-    // 4. Inactive breakdown - ALL regions
+    // 4. Inactive breakdown - excluding Toshkent city
     const fixableQuery = `
       SELECT COUNT(DISTINCT c.id) as count
       FROM customers c
@@ -87,7 +89,8 @@ export async function GET(request: NextRequest) {
       WHERE c.role_id = '2'
         AND c.status = 'inactive'
         AND c.created_at >= $1
-        AND cmr.reason_id IN ($2, $3)
+        AND (di.departure_region_id != $2 OR di.arrival_region_id != $2)
+        AND cmr.reason_id IN ($3, $4)
     `;
 
     const notEligibleQuery = `
@@ -98,10 +101,11 @@ export async function GET(request: NextRequest) {
       WHERE c.role_id = '2'
         AND c.status = 'inactive'
         AND c.created_at >= $1
-        AND cmr.reason_id = $2
+        AND (di.departure_region_id != $2 OR di.arrival_region_id != $2)
+        AND cmr.reason_id = $3
     `;
 
-    // 5. Old drivers who became active (created before campaign)
+    // 5. Old drivers who became active (created before campaign) - excluding Toshkent city
     const oldActiveQuery = `
       SELECT COUNT(*) as count
       FROM customers c
@@ -109,22 +113,25 @@ export async function GET(request: NextRequest) {
       WHERE c.role_id = '2'
         AND c.status = 'active'
         AND c.created_at < $1
+        AND (di.departure_region_id != $2 OR di.arrival_region_id != $2)
     `;
 
     const [overallResult, byRegionResult, dailyResult, fixableResult, notEligibleResult, oldActiveResult] = await Promise.all([
-      pool.query(overallQuery, [fromDate]),
+      pool.query(overallQuery, [fromDate, TASHKENT_CITY_ID]),
       pool.query(byRegionQuery, [fromDate, TASHKENT_CITY_ID]),
-      pool.query(dailyQuery, [fromDate]),
+      pool.query(dailyQuery, [fromDate, TASHKENT_CITY_ID]),
       pool.query(fixableQuery, [
         fromDate,
+        TASHKENT_CITY_ID,
         INACTIVE_REASONS.PERSONAL_INFO_ERROR,
         INACTIVE_REASONS.CAR_INFO_ERROR,
       ]),
       pool.query(notEligibleQuery, [
         fromDate,
+        TASHKENT_CITY_ID,
         INACTIVE_REASONS.CAR_NOT_ELIGIBLE,
       ]),
-      pool.query(oldActiveQuery, [fromDate]),
+      pool.query(oldActiveQuery, [fromDate, TASHKENT_CITY_ID]),
     ]);
 
     const overall = overallResult.rows[0];
