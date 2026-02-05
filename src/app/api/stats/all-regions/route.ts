@@ -9,6 +9,7 @@ const {
   CAMPAIGN_DURATION,
   TARGET_ACTIVE_DRIVERS,
   UTC_OFFSET_HOURS,
+  TASHKENT_CITY_ID,
 } = CAMPAIGN_CONFIG;
 
 export async function GET(request: NextRequest) {
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
 
     // 2. Stats by region (where region is either departure OR arrival)
     // This counts each driver for EACH region they're connected to
+    // Excludes Toshkent city (ID: 2) since all routes go through Toshkent
     const byRegionQuery = `
       WITH driver_regions AS (
         SELECT DISTINCT
@@ -44,6 +46,7 @@ export async function GET(request: NextRequest) {
         JOIN regions r ON r.id IN (di.departure_region_id, di.arrival_region_id)
         WHERE c.role_id = '2'
           AND c.created_at >= $1
+          AND r.id != $2
       )
       SELECT
         region_id,
@@ -110,7 +113,7 @@ export async function GET(request: NextRequest) {
 
     const [overallResult, byRegionResult, dailyResult, fixableResult, notEligibleResult, oldActiveResult] = await Promise.all([
       pool.query(overallQuery, [fromDate]),
-      pool.query(byRegionQuery, [fromDate]),
+      pool.query(byRegionQuery, [fromDate, TASHKENT_CITY_ID]),
       pool.query(dailyQuery, [fromDate]),
       pool.query(fixableQuery, [
         fromDate,
