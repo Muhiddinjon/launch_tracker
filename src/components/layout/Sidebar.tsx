@@ -8,6 +8,7 @@ const menuItems = [
   { href: '/drivers', label: 'Drivers', icon: '👥' },
   { href: '/reactivation', label: 'Reaktivatsiya', icon: '🔄' },
   { href: '/budget', label: 'Budjet', icon: '💰' },
+  { href: '/call-center', label: 'Call Center', icon: '📞' },
   { href: '/campaigns', label: 'Campaigns', icon: '📢' },
   { href: '/sms', label: 'SMS Matching', icon: '📱' },
 ];

@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 // Singleton pattern for serverless environments
 // Prevents creating new pool on every function invocation
 declare global {
-  // eslint-disable-next-line no-var
+   
   var pgPool: Pool | undefined;
 }
 

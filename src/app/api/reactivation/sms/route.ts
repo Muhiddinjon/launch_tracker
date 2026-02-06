@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate conversion stats
-    let conversionStats = {
+    const conversionStats = {
       totalMatched: 0,
       converted: 0,
       pending: 0,
