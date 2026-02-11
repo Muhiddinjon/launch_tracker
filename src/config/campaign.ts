@@ -27,10 +27,14 @@ export const BUDGET_CONFIG = {
 
   // Category configurations
   CATEGORIES: {
-    ADS: {
-      id: 'ads',
-      name: 'Target reklama',
-      dailyBudget: 40, // $40/kun
+    ADS_REGULAR: {
+      id: 'ads_regular',
+      name: 'Target oddiy',
+      currency: 'USD',
+    },
+    ADS_LEAD: {
+      id: 'ads_lead',
+      name: 'Target lead',
       currency: 'USD',
     },
     SMS: {
@@ -53,12 +57,12 @@ export const BUDGET_CONFIG = {
     },
   },
 
-  // Exchange rate (approximate)
-  USD_TO_UZS: 12800,
+  // Exchange rate
+  USD_TO_UZS: 12200,
 } as const;
 
 // Budget category type
-export type BudgetCategoryId = 'ads' | 'sms' | 'flyers' | 'telegram';
+export type BudgetCategoryId = 'ads' | 'ads_regular' | 'ads_lead' | 'sms' | 'flyers' | 'telegram';
 
 // Driver statuses
 export const DRIVER_STATUSES = {

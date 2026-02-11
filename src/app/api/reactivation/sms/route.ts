@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFromStorage, setToStorage } from '@/lib/redis';
 import pool from '@/lib/db';
-import { BUDGET_CONFIG } from '@/config/campaign';
+import { BUDGET_CONFIG, CAMPAIGN_CONFIG } from '@/config/campaign';
 
 // Storage keys
 const SMS_DATA_KEY = 'reactivation-sms-data';
@@ -52,20 +52,52 @@ async function saveSmsData(data: SmsData): Promise<void> {
   await setToStorage(SMS_DATA_KEY, JSON.stringify(data));
 }
 
-// Get all drivers from database
-async function getAllDrivers(): Promise<Array<{ id: string; phone_number: string; status: string }>> {
-  const query = `
-    SELECT c.id, c.phone_number, c.status
-    FROM customers c
-    JOIN driver_infos di ON c.id = di.customer_id
-    WHERE c.role_id = '2'
-  `;
+// Budget storage key (same as in budget/route.ts)
+const BUDGET_KEY = 'reactivation-budget';
 
+// Get all drivers with full info for funnel calculation
+async function getAllDriversFull(): Promise<Array<{
+  id: string;
+  phone_number: string;
+  first_name: string | null;
+  status: string;
+  created_at: string;
+  departure_region_id: string | null;
+  arrival_region_id: string | null;
+}>> {
+  const query = `
+    SELECT c.id, c.phone_number, c.first_name, c.status, c.created_at,
+           di.departure_region_id, di.arrival_region_id
+    FROM customers c
+    LEFT JOIN driver_infos di ON c.id = di.customer_id
+    WHERE c.role_id = '2'
+      AND c.phone_number IS NOT NULL
+  `;
   const result = await pool.query(query);
   return result.rows;
 }
 
-// GET - Get SMS data and conversion stats
+// Get total SMS cost from budget expenses
+async function getSmsCostFromBudget(): Promise<{ totalUZS: number; totalUSD: number }> {
+  const data = await getFromStorage(BUDGET_KEY);
+  let totalUZS = 0;
+  if (data) {
+    try {
+      const budgetData = JSON.parse(data);
+      totalUZS = (budgetData.expenses || [])
+        .filter((e: { categoryId: string }) => e.categoryId === 'sms')
+        .reduce((sum: number, e: { amount: number }) => sum + e.amount, 0);
+    } catch {
+      // ignore
+    }
+  }
+  return {
+    totalUZS,
+    totalUSD: totalUZS / BUDGET_CONFIG.USD_TO_UZS,
+  };
+}
+
+// GET - Get SMS funnel stats
 export async function GET() {
   try {
     const smsData = await loadSmsData();
@@ -77,42 +109,69 @@ export async function GET() {
       });
     }
 
-    // Recalculate conversion stats from current driver statuses
-    if (smsData.matchedDrivers && smsData.matchedDrivers.length > 0) {
-      // Use parameterized query to avoid SQL injection
-      const placeholders = smsData.matchedDrivers.map((_, i) => `$${i + 1}`).join(',');
-      const query = `
-        SELECT id, status, phone_number
-        FROM customers
-        WHERE id IN (${placeholders})
-      `;
-      const result = await pool.query(query, smsData.matchedDrivers);
+    const { TASHKENT_REGION_ID, TASHKENT_CITY_ID, DATA_START_DATE } = CAMPAIGN_CONFIG;
 
-      const stats = {
-        totalMatched: result.rows.length,
-        converted: result.rows.filter(r => r.status === 'active').length,
-        pending: result.rows.filter(r => r.status === 'pending').length,
-        inactive: result.rows.filter(r => r.status === 'inactive').length,
-      };
+    // Load all drivers and SMS cost in parallel
+    const [allDrivers, smsCost] = await Promise.all([
+      getAllDriversFull(),
+      getSmsCostFromBudget(),
+    ]);
 
-      smsData.conversionStats = stats;
+    // Build last-9-digits set from SMS phone numbers
+    const smsLast9Set = new Set(smsData.phoneNumbers.map(p => p.slice(-9)));
+
+    // Match and compute funnel
+    let loginCount = 0;
+    let fullRegWithRoute = 0;
+    let fullRegNoRoute = 0;
+    let activeWithRoute = 0;
+    let activeNoRoute = 0;
+
+    const dataStartDate = new Date(DATA_START_DATE);
+
+    for (const driver of allDrivers) {
+      const driverLast9 = driver.phone_number.replace(/\D/g, '').slice(-9);
+      if (!driverLast9 || !smsLast9Set.has(driverLast9)) continue;
+
+      // Login: matched + created_at >= DATA_START_DATE
+      const createdAt = new Date(driver.created_at);
+      if (createdAt < dataStartDate) continue;
+
+      loginCount++;
+
+      // Full register check: first_name exists and not empty
+      const isFullReg = driver.first_name && driver.first_name.trim() !== '';
+
+      // Route check: Toshkent Viloyati ↔ Toshkent Shahar
+      const isTashkentRoute =
+        (driver.departure_region_id === TASHKENT_REGION_ID && driver.arrival_region_id === TASHKENT_CITY_ID) ||
+        (driver.departure_region_id === TASHKENT_CITY_ID && driver.arrival_region_id === TASHKENT_REGION_ID);
+
+      if (isFullReg) {
+        fullRegNoRoute++;
+        if (isTashkentRoute) fullRegWithRoute++;
+      }
+
+      if (isFullReg && driver.status === 'active') {
+        activeNoRoute++;
+        if (isTashkentRoute) activeWithRoute++;
+      }
     }
-
-    // Calculate cost
-    const costUZS = smsData.totalSent * BUDGET_CONFIG.CATEGORIES.SMS.costPerUnit;
-    const costUSD = costUZS / BUDGET_CONFIG.USD_TO_UZS;
 
     return NextResponse.json({
       uploaded: true,
-      ...smsData,
-      cost: {
-        uzs: costUZS,
-        usd: costUSD,
-        perSms: BUDGET_CONFIG.CATEGORIES.SMS.costPerUnit,
+      totalUniquePhones: smsData.totalSent,
+      withRouteFilter: {
+        login: loginCount,
+        fullRegister: fullRegWithRoute,
+        active: activeWithRoute,
       },
-      conversionRate: smsData.conversionStats.totalMatched > 0
-        ? ((smsData.conversionStats.converted / smsData.conversionStats.totalMatched) * 100).toFixed(1) + '%'
-        : '0%',
+      withoutRouteFilter: {
+        login: loginCount,
+        fullRegister: fullRegNoRoute,
+        active: activeNoRoute,
+      },
+      smsCost,
     });
   } catch (error) {
     console.error('Error loading SMS data:', error);
@@ -159,7 +218,7 @@ export async function POST(request: NextRequest) {
     const uniquePhones = [...new Set(phoneNumbers)];
 
     // Get all drivers from database
-    const allDrivers = await getAllDrivers();
+    const allDrivers = await getAllDriversFull();
 
     // Match phone numbers with drivers
     let matchedDrivers: string[] = [];

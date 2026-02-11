@@ -60,10 +60,11 @@ function calculateSummary(data: BudgetData) {
     byCategory[cat.id] = { totalUSD: 0, totalUZS: 0, count: 0 };
   });
 
-  // Sum up expenses
+  // Sum up expenses (treat legacy 'ads' as 'ads_regular')
   let totalSpentUSD = 0;
   data.expenses.forEach(expense => {
-    const cat = byCategory[expense.categoryId];
+    const catId = expense.categoryId === 'ads' ? 'ads_regular' : expense.categoryId;
+    const cat = byCategory[catId];
     if (cat) {
       cat.count++;
       if (expense.currency === 'USD') {
