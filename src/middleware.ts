@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -17,27 +16,7 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value;
   const secret = process.env.AUTH_SECRET;
 
-  if (!token || !secret) {
-    return redirectToLogin(request, pathname);
-  }
-
-  // Verify token: "username:timestamp:signature"
-  const parts = token.split(':');
-  if (parts.length !== 3) {
-    return redirectToLogin(request, pathname);
-  }
-
-  const [username, timestamp, signature] = parts;
-  const payload = `${username}:${timestamp}`;
-  const expectedSignature = createHmac('sha256', secret).update(payload).digest('hex');
-
-  if (signature !== expectedSignature) {
-    return redirectToLogin(request, pathname);
-  }
-
-  // Check expiry (1 hour)
-  const tokenAge = Date.now() - parseInt(timestamp);
-  if (tokenAge > 60 * 60 * 1000) {
+  if (!token || !secret || token !== secret) {
     return redirectToLogin(request, pathname);
   }
 

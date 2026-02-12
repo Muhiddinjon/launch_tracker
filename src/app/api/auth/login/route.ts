@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,13 +16,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Login yoki parol noto\'g\'ri' }, { status: 401 });
     }
 
-    // Create signed token
-    const payload = `${username}:${Date.now()}`;
-    const signature = createHmac('sha256', secret).update(payload).digest('hex');
-    const token = `${payload}:${signature}`;
-
     const response = NextResponse.json({ success: true });
-    response.cookies.set('auth_token', token, {
+    response.cookies.set('auth_token', secret, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
