@@ -9,6 +9,7 @@ interface Stats {
     blocked: number;
     inactive: number;
     total: number;
+    activeWithBalance: number;
   };
   target: {
     goal: number;
@@ -78,6 +79,13 @@ interface ReactivationStats {
   };
 }
 
+interface BudgetSummary {
+  totalBudget: number;
+  totalSpent: number;
+  remaining: number;
+  exchangeRate: number;
+}
+
 interface AllRegionsStats {
   summary: {
     pending: number;
@@ -85,6 +93,7 @@ interface AllRegionsStats {
     blocked: number;
     inactive: number;
     total: number;
+    activeWithBalance: number;
   };
   byRegion: Array<{
     region_id: string;
@@ -102,6 +111,7 @@ export default function Dashboard() {
   const [campaigns, setCampaigns] = useState<CampaignData | null>(null);
   const [reactivation, setReactivation] = useState<ReactivationStats | null>(null);
   const [allRegions, setAllRegions] = useState<AllRegionsStats | null>(null);
+  const [budgetSummary, setBudgetSummary] = useState<BudgetSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,12 +122,13 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [statsRes, campaignsRes, trackingRes, driversRes, allRegionsRes] = await Promise.all([
+      const [statsRes, campaignsRes, trackingRes, driversRes, allRegionsRes, budgetRes] = await Promise.all([
         fetch('/api/stats/tashkent-region?from_date=2026-01-26'),
         fetch('/api/campaigns'),
         fetch('/api/reactivation/tracking'),
         fetch('/api/reactivation/drivers'),
         fetch('/api/stats/all-regions?from_date=2026-01-26'),
+        fetch('/api/reactivation/budget'),
       ]);
 
       if (!statsRes.ok) throw new Error('Failed to fetch stats');
@@ -127,6 +138,7 @@ export default function Dashboard() {
       const trackingData = trackingRes.ok ? await trackingRes.json() : { stats: { totalCalled: 0, totalConverted: 0 } };
       const driversData = driversRes.ok ? await driversRes.json() : { summary: { total: 0, inactive: 0, active: 0, pending: 0 } };
       const allRegionsData = allRegionsRes.ok ? await allRegionsRes.json() : null;
+      const budgetData = budgetRes.ok ? await budgetRes.json() : null;
 
       setStats(statsData);
       setCampaigns(campaignsData);
@@ -135,6 +147,7 @@ export default function Dashboard() {
         driverSummary: driversData.summary,
       });
       setAllRegions(allRegionsData);
+      if (budgetData?.summary) setBudgetSummary(budgetData.summary);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -153,7 +166,7 @@ export default function Dashboard() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('uz-UZ').format(amount) + ' so\'m';
+    return new Intl.NumberFormat('en-US').format(Math.round(amount)) + " so'm";
   };
 
   if (loading) {
@@ -234,6 +247,7 @@ export default function Dashboard() {
             {reactivatedActive > 0 && (
               <div className="text-gray-500">Reaktivatsiya: <span className="text-purple-600 font-medium">+{reactivatedActive}</span></div>
             )}
+            <div className="text-gray-500">Balansi bor: <span className="text-blue-600 font-medium">{stats?.summary.activeWithBalance || 0}</span></div>
           </div>
         </div>
 
@@ -272,11 +286,19 @@ export default function Dashboard() {
           <div className="flex justify-between items-start">
             <div>
               <div className="text-sm font-medium text-gray-500">SPENT</div>
-              <div className="text-2xl font-bold text-purple-600">{formatCurrency(totalSpent)}</div>
+              <div className="text-2xl font-bold text-purple-600">${Math.round(budgetSummary?.totalSpent || 0)}</div>
             </div>
             <span className="text-2xl">💰</span>
           </div>
-          <div className="mt-2 text-xs text-gray-400">Marketing</div>
+          <div className="mt-2 text-xs space-y-0.5">
+            <div className="text-gray-500">{formatCurrency((budgetSummary?.totalSpent || 0) * (budgetSummary?.exchangeRate || 12200))}</div>
+            {combinedActive > 0 && budgetSummary && budgetSummary.totalSpent > 0 && (
+              <div className="text-gray-500">
+                1 driver = <span className="text-purple-600 font-medium">${(budgetSummary.totalSpent / combinedActive).toFixed(1)}</span>
+                <span className="text-gray-400 ml-1">({formatCurrency(Math.round((budgetSummary.totalSpent * (budgetSummary.exchangeRate || 12200)) / combinedActive))})</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -625,14 +647,20 @@ export default function Dashboard() {
             <div className="bg-white rounded-lg p-4 shadow-sm">
               <div className="text-sm text-gray-500">Active</div>
               <div className="text-2xl font-bold text-green-600">{allRegions.summary.active}</div>
+              <div className="text-xs text-gray-500 mt-1">Balansi bor: <span className="text-blue-600 font-medium">{allRegions.summary.activeWithBalance || 0}</span></div>
             </div>
             <div className="bg-white rounded-lg p-4 shadow-sm">
               <div className="text-sm text-gray-500">Inactive</div>
               <div className="text-2xl font-bold text-gray-600">{allRegions.summary.inactive}</div>
             </div>
             <div className="bg-white rounded-lg p-4 shadow-sm">
-              <div className="text-sm text-gray-500">Blocked</div>
-              <div className="text-2xl font-bold text-red-600">{allRegions.summary.blocked}</div>
+              <div className="text-sm text-gray-500">Spent</div>
+              <div className="text-2xl font-bold text-purple-600">${Math.round(budgetSummary?.totalSpent || 0)}</div>
+              {allRegions.summary.active > 0 && budgetSummary && budgetSummary.totalSpent > 0 && (
+                <div className="text-xs text-gray-500 mt-1">
+                  1 driver = <span className="text-purple-600 font-medium">${(budgetSummary.totalSpent / allRegions.summary.active).toFixed(1)}</span>
+                </div>
+              )}
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 const menuItems = [
   { href: '/', label: 'Dashboard', icon: '📊' },
@@ -15,6 +15,13 @@ const menuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+    router.refresh();
+  };
 
   return (
     <div className="w-64 bg-gray-900 min-h-screen fixed left-0 top-0">
@@ -48,12 +55,18 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {/* Campaign Info */}
+      {/* Campaign Info & Logout */}
       <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800">
-        <div className="text-xs text-gray-400">
+        <div className="text-xs text-gray-400 mb-3">
           <div>Campaign: 29.01 - 27.02.2026</div>
           <div>Target: 300 Active Drivers</div>
         </div>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-300 bg-gray-800 rounded-lg hover:bg-red-600 hover:text-white transition-colors"
+        >
+          Chiqish
+        </button>
       </div>
     </div>
   );

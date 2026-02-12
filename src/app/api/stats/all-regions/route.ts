@@ -144,6 +144,25 @@ export async function GET(request: NextRequest) {
     const fixableCount = parseInt(fixableResult.rows[0]?.count || '0');
     const notEligibleCount = parseInt(notEligibleResult.rows[0]?.count || '0');
 
+    // Active drivers with positive balance (separate try-catch to not break main API)
+    let activeWithBalance = 0;
+    try {
+      const balanceResult = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM customers c
+        JOIN driver_infos di ON c.id = di.customer_id
+        JOIN customer_balance cb ON c.id = cb.customer_id
+        WHERE c.role_id = '2'
+          AND c.status = 'active'
+          AND c.created_at >= $1
+          AND cb.balance > 0
+          AND (di.departure_region_id != $2 OR di.arrival_region_id != $2)
+      `, [fromDate, TASHKENT_CITY_ID]);
+      activeWithBalance = parseInt(balanceResult.rows[0]?.count || '0');
+    } catch (err) {
+      console.error('Balance query error:', err);
+    }
+
     // Campaign metrics
     const campaignStart = new Date(CAMPAIGN_START_DATE);
     const now = new Date();
@@ -168,6 +187,7 @@ export async function GET(request: NextRequest) {
         inactive,
         total: pending + active + blocked + inactive,
         oldActiveDrivers: oldActiveCount,
+        activeWithBalance,
       },
       target: {
         goal: TARGET_ACTIVE_DRIVERS,
