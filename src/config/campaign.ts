@@ -64,6 +64,17 @@ export const BUDGET_CONFIG = {
 // Budget category type
 export type BudgetCategoryId = 'ads' | 'ads_regular' | 'ads_lead' | 'sms' | 'flyers' | 'telegram';
 
+// Source codes for tracking
+export const SOURCE_CODES = {
+  LEAD: 'cml5adx980000la04tuyyeh8e',
+  REGULAR_TARGET: 'cmkurqj560002kt043hp58v76',
+  TELEGRAM_GLOBAL: 'cml64lcz10009l804neznadfn',
+  TELEGRAM_ADS: 'cmlgd0ots0048lf04gzf459yc',
+} as const;
+
+// Flyer tracking start date (Tashkent time)
+export const FLYER_START_DATE = '2026-02-09T03:00:00.000Z'; // 09.02 08:00 Tashkent = 03:00 UTC
+
 // Driver statuses
 export const DRIVER_STATUSES = {
   PENDING: 'pending',

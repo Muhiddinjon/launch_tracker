@@ -58,6 +58,20 @@ interface TargetData {
   targetCost: { regularUSD: number; leadUSD: number; totalUSD: number };
 }
 
+interface ChannelFunnel {
+  withRouteFilter: FunnelStats;
+  withoutRouteFilter: FunnelStats;
+  costUSD: number;
+  costUZS: number;
+}
+
+interface FlyerTelegramData {
+  flyer: ChannelFunnel;
+  telegramGlobal: ChannelFunnel;
+  telegramAds: ChannelFunnel;
+  telegramTotal: { costUSD: number; costUZS: number };
+}
+
 const FUNNEL_COLORS: Record<string, { bg: string; text: string; bar: string }> = {
   blue:   { bg: 'bg-blue-100',   text: 'text-blue-700',   bar: 'bg-blue-500' },
   purple: { bg: 'bg-purple-100', text: 'text-purple-700', bar: 'bg-purple-500' },
@@ -106,6 +120,7 @@ export default function BudgetPage() {
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [smsData, setSmsData] = useState<SmsData | null>(null);
   const [targetData, setTargetData] = useState<TargetData | null>(null);
+  const [ftData, setFtData] = useState<FlyerTelegramData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showTargetModal, setShowTargetModal] = useState(false);
@@ -122,10 +137,11 @@ export default function BudgetPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [budgetRes, smsRes, targetRes] = await Promise.all([
+      const [budgetRes, smsRes, targetRes, ftRes] = await Promise.all([
         fetch('/api/reactivation/budget'),
         fetch('/api/reactivation/sms'),
         fetch('/api/reactivation/target'),
+        fetch('/api/reactivation/flyer-telegram'),
       ]);
 
       if (budgetRes.ok) {
@@ -142,6 +158,11 @@ export default function BudgetPage() {
       if (targetRes.ok) {
         const data = await targetRes.json();
         setTargetData(data);
+      }
+
+      if (ftRes.ok) {
+        const data = await ftRes.json();
+        setFtData(data);
       }
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -598,6 +619,151 @@ export default function BudgetPage() {
                       <FunnelRow label="Login Page" count={la.login} color="blue" widthPercent={100} formatCurrency={formatCurrency} costTotal={leadCostUZS} />
                       <FunnelRow label="Full Register" count={la.fullRegister} prevCount={la.login} color="yellow" widthPercent={Math.max(10, (la.fullRegister / (la.login || 1)) * 100)} formatCurrency={formatCurrency} costTotal={leadCostUZS} />
                       <FunnelRow label="Active" count={la.active} prevCount={la.fullRegister} color="green" widthPercent={Math.max(8, (la.active / (la.login || 1)) * 100)} formatCurrency={formatCurrency} costTotal={leadCostUZS} />
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Flyer Section */}
+      {ftData && (
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Flayer (09.02 dan)</h2>
+            {ftData.flyer.costUSD > 0 && (
+              <span className="text-sm text-gray-500">
+                Xarajat: <span className="font-semibold text-gray-700">{formatCurrency(ftData.flyer.costUSD)}</span>
+                <span className="text-gray-400 ml-1">({formatCurrency(ftData.flyer.costUZS, 'UZS')})</span>
+              </span>
+            )}
+          </div>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Toshkent yo&apos;nalishi (Viloyat - Shahar)</h3>
+              <div className="space-y-2">
+                {(() => {
+                  const f = ftData.flyer;
+                  const costUZS = f.costUZS;
+                  const fr = f.withRouteFilter;
+                  const maxCount = f.withoutRouteFilter.login || 1;
+                  return (
+                    <>
+                      <FunnelRow label="Login" count={fr.login} color="blue" widthPercent={Math.max(15, (fr.login / maxCount) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                      <FunnelRow label="Full Register" count={fr.fullRegister} prevCount={fr.login} color="yellow" widthPercent={Math.max(10, (fr.fullRegister / maxCount) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                      <FunnelRow label="Active" count={fr.active} prevCount={fr.fullRegister} color="green" widthPercent={Math.max(8, (fr.active / maxCount) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Barcha yo&apos;nalishlar</h3>
+              <div className="space-y-2">
+                {(() => {
+                  const f = ftData.flyer;
+                  const costUZS = f.costUZS;
+                  const fa = f.withoutRouteFilter;
+                  return (
+                    <>
+                      <FunnelRow label="Login" count={fa.login} color="blue" widthPercent={100} formatCurrency={formatCurrency} costTotal={costUZS} />
+                      <FunnelRow label="Full Register" count={fa.fullRegister} prevCount={fa.login} color="yellow" widthPercent={Math.max(10, (fa.fullRegister / (fa.login || 1)) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                      <FunnelRow label="Active" count={fa.active} prevCount={fa.fullRegister} color="green" widthPercent={Math.max(8, (fa.active / (fa.login || 1)) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Telegram Section */}
+      {ftData && (
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Telegram</h2>
+            {ftData.telegramTotal.costUSD > 0 && (
+              <span className="text-sm text-gray-500">
+                Umumiy xarajat: <span className="font-semibold text-gray-700">{formatCurrency(ftData.telegramTotal.costUSD)}</span>
+              </span>
+            )}
+          </div>
+          <div className="space-y-6">
+            {/* Telegram Global */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Telegram Global</h3>
+              <div className="mb-2"><span className="text-xs text-gray-500">Toshkent yo&apos;nalishi</span></div>
+              <div className="space-y-1.5">
+                {(() => {
+                  const tg = ftData.telegramGlobal;
+                  const tr = tg.withRouteFilter;
+                  const maxCount = tg.withoutRouteFilter.login || 1;
+                  return (
+                    <>
+                      <FunnelRow label="Login" count={tr.login} color="blue" widthPercent={Math.max(15, (tr.login / maxCount) * 100)} formatCurrency={formatCurrency} />
+                      <FunnelRow label="Full Register" count={tr.fullRegister} prevCount={tr.login} color="yellow" widthPercent={Math.max(10, (tr.fullRegister / maxCount) * 100)} formatCurrency={formatCurrency} />
+                      <FunnelRow label="Active" count={tr.active} prevCount={tr.fullRegister} color="green" widthPercent={Math.max(8, (tr.active / maxCount) * 100)} formatCurrency={formatCurrency} />
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="mt-2 mb-2"><span className="text-xs text-gray-500">Barcha yo&apos;nalishlar</span></div>
+              <div className="space-y-1.5">
+                {(() => {
+                  const ta = ftData.telegramGlobal.withoutRouteFilter;
+                  return (
+                    <>
+                      <FunnelRow label="Login" count={ta.login} color="blue" widthPercent={100} formatCurrency={formatCurrency} />
+                      <FunnelRow label="Full Register" count={ta.fullRegister} prevCount={ta.login} color="yellow" widthPercent={Math.max(10, (ta.fullRegister / (ta.login || 1)) * 100)} formatCurrency={formatCurrency} />
+                      <FunnelRow label="Active" count={ta.active} prevCount={ta.fullRegister} color="green" widthPercent={Math.max(8, (ta.active / (ta.login || 1)) * 100)} formatCurrency={formatCurrency} />
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <hr className="border-gray-200" />
+
+            {/* Telegram Reklama */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-700">Telegram Reklama</h3>
+                {ftData.telegramAds.costUSD > 0 && (
+                  <span className="text-xs text-gray-500">
+                    Xarajat: <span className="font-semibold">{formatCurrency(ftData.telegramAds.costUSD)}</span>
+                  </span>
+                )}
+              </div>
+              <div className="mb-2"><span className="text-xs text-gray-500">Toshkent yo&apos;nalishi</span></div>
+              <div className="space-y-1.5">
+                {(() => {
+                  const ta = ftData.telegramAds;
+                  const costUZS = ta.costUZS;
+                  const tr = ta.withRouteFilter;
+                  const maxCount = ta.withoutRouteFilter.login || 1;
+                  return (
+                    <>
+                      <FunnelRow label="Login" count={tr.login} color="blue" widthPercent={Math.max(15, (tr.login / maxCount) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                      <FunnelRow label="Full Register" count={tr.fullRegister} prevCount={tr.login} color="yellow" widthPercent={Math.max(10, (tr.fullRegister / maxCount) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                      <FunnelRow label="Active" count={tr.active} prevCount={tr.fullRegister} color="green" widthPercent={Math.max(8, (tr.active / maxCount) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="mt-2 mb-2"><span className="text-xs text-gray-500">Barcha yo&apos;nalishlar</span></div>
+              <div className="space-y-1.5">
+                {(() => {
+                  const ta = ftData.telegramAds;
+                  const costUZS = ta.costUZS;
+                  const fa = ta.withoutRouteFilter;
+                  return (
+                    <>
+                      <FunnelRow label="Login" count={fa.login} color="blue" widthPercent={100} formatCurrency={formatCurrency} costTotal={costUZS} />
+                      <FunnelRow label="Full Register" count={fa.fullRegister} prevCount={fa.login} color="yellow" widthPercent={Math.max(10, (fa.fullRegister / (fa.login || 1)) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
+                      <FunnelRow label="Active" count={fa.active} prevCount={fa.fullRegister} color="green" widthPercent={Math.max(8, (fa.active / (fa.login || 1)) * 100)} formatCurrency={formatCurrency} costTotal={costUZS} />
                     </>
                   );
                 })()}

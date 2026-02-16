@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
       ORDER BY date
     `;
 
-    // 6. Sub-region breakdown - by route (consistent with drivers page)
+    // 6. Sub-region breakdown - viloyat tuman (Toshkent shahar bo'lmagan tomon)
     const subRegionQuery = `
       SELECT
         COALESCE(sr.id, '0') as id,
@@ -112,7 +112,10 @@ export async function GET(request: NextRequest) {
         COUNT(*) as total
       FROM customers c
       JOIN driver_infos di ON c.id = di.customer_id
-      LEFT JOIN sub_regions sr ON di.departure_sub_region_id = sr.id
+      LEFT JOIN sub_regions sr ON sr.id = CASE
+        WHEN di.departure_region_id != $3 THEN di.departure_sub_region_id
+        ELSE di.arrival_sub_region_id
+      END
       WHERE c.role_id = '2'
         AND c.created_at >= $1
         AND (
