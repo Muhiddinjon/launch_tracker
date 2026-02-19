@@ -170,6 +170,17 @@ export default function CallCenterPage() {
     return <div className="p-6 text-gray-500">Yuklanmoqda...</div>;
   }
 
+  // Lead call stats (static data)
+  const leadStats = {
+    total: 7030,
+    tashkent: 643,
+    activePending: 158,
+    unsuccessful: 223,
+    willConnect: 200,
+    anotherRegion: 26,
+    notSuitable: 18,
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -183,6 +194,43 @@ export default function CallCenterPage() {
             {uploading ? '...' : 'CSV Yuklash'}
             <input type="file" accept=".csv" onChange={handleUpload} className="hidden" />
           </label>
+        </div>
+      </div>
+
+      {/* Lead Calls Stats */}
+      <div className="bg-gradient-to-r from-violet-50 to-indigo-50 rounded shadow p-4 mb-6 border border-violet-200">
+        <h3 className="font-semibold text-violet-900 mb-3">Lead Calllar Statistikasi</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div className="bg-white rounded p-3 text-center">
+            <div className="text-2xl font-bold text-violet-700">{leadStats.total.toLocaleString()}</div>
+            <div className="text-xs text-gray-500">Jami Leadlar</div>
+          </div>
+          <div className="bg-white rounded p-3 text-center">
+            <div className="text-2xl font-bold text-blue-700">{leadStats.tashkent}</div>
+            <div className="text-xs text-gray-500">Toshkent</div>
+          </div>
+          <div className="bg-white rounded p-3 text-center">
+            <div className="text-2xl font-bold text-emerald-700">{leadStats.activePending}</div>
+            <div className="text-xs text-gray-500">Active / Pending</div>
+          </div>
+          <div className="bg-white rounded p-3 text-center">
+            <div className="text-2xl font-bold text-orange-600">{leadStats.unsuccessful}</div>
+            <div className="text-xs text-gray-500">Muvaffaqiyatsiz Calllar</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white rounded p-3 text-center">
+            <div className="text-xl font-bold text-green-600">{leadStats.willConnect}</div>
+            <div className="text-xs text-gray-500">Ulanaman dedi</div>
+          </div>
+          <div className="bg-white rounded p-3 text-center">
+            <div className="text-xl font-bold text-sky-600">{leadStats.anotherRegion}</div>
+            <div className="text-xs text-gray-500">Boshqa Region</div>
+          </div>
+          <div className="bg-white rounded p-3 text-center">
+            <div className="text-xl font-bold text-red-600">{leadStats.notSuitable}</div>
+            <div className="text-xs text-gray-500">Mos Emas</div>
+          </div>
         </div>
       </div>
 
